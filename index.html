@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Battery Drainer MAXXX</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; overflow: hidden;
+      background: black;
+      font-family: monospace;
+      height: 100%;
+      width: 100%;
+    }
+
+    #glcanvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      z-index: 0;
+    }
+
+    #overlay {
+      position: fixed;
+      width: 100%;
+      top: 20px;
+      color: white;
+      text-align: center;
+      font-size: 3em;
+      font-weight: bold;
+      z-index: 10;
+      text-shadow: 0 0 10px white;
+      pointer-events: none;
+    }
+
+    #console {
+      position: fixed;
+      top: 100px;
+      width: 100%;
+      height: calc(100% - 100px);
+      font-size: 0.9em;
+      padding: 20px;
+      box-sizing: border-box;
+      white-space: pre;
+      overflow: hidden;
+      z-index: 9;
+      color: white;
+      text-shadow: 0 0 10px white;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="glcanvas"></canvas>
+  <div id="overlay">Draining battery...</div>
+  <div id="console"></div>
+
+  <audio id="audio" autoplay loop>
+    <source src="data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAwACAAACAAgAZGF0YQAAAAA=" type="audio/mp3">
+  </audio>
+
+  <script>
+    const canvas = document.getElementById("glcanvas");
+    const gl = canvas.getContext("webgl");
+
+    function resize() {
+      canvas.width = window.innerWidth * devicePixelRatio;
+      canvas.height = window.innerHeight * devicePixelRatio;
+      canvas.style.width = window.innerWidth + "px";
+      canvas.style.height = window.innerHeight + "px";
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    const vsSource = `
+      attribute vec4 a_position;
+      void main() {
+        gl_Position = a_position;
+      }
+    `;
+
+    const fsSource = `
+      precision highp float;
+      uniform float u_time;
+
+      vec3 kernal(vec3 ver) {
+        vec3 a = ver;
+        float b, c, d, e;
+        for (int i = 0; i < 15; i++) {  // Increased iterations!
+          b = length(a);
+          c = atan(a.y, a.x) * 8.0;
+          e = 1.0 / b;
+          d = acos(a.z / b) * 8.0;
+          b = pow(b, 8.0);
+          a = vec3(
+            b * sin(d) * cos(c),
+            b * sin(d) * sin(c),
+            b * cos(d)
+          ) + ver;
+          if (b > 6.0) break;
+        }
+        return a;
+      }
+
+      void main() {
+        vec2 uv = (gl_FragCoord.xy / vec2(${window.innerWidth * devicePixelRatio}.0, ${window.innerHeight * devicePixelRatio}.0)) * 2.0 - 1.0;
+        vec3 p = vec3(uv * 2.0, sin(u_time));
+        vec3 result = kernal(p);
+        float intensity = dot(result, result);
+        gl_FragColor = vec4(fract(intensity), fract(intensity * 1.5), fract(intensity * 2.0), 1.0);
+      }
+    `;
+
+    function compileShader(type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compile failed:', gl.getShaderInfoLog(shader));
+      }
+      return shader;
+    }
+
+    const vertexShader = compileShader(gl.VERTEX_SHADER, vsSource);
+    const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fsSource);
+
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.error('Program link failed:', gl.getProgramInfoLog(program));
+    }
+
+    gl.useProgram(program);
+
+    const positionLocation = gl.getAttribLocation(program, "a_position");
+    const timeLocation = gl.getUniformLocation(program, "u_time");
+
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([
+        -1, -1,
+         1, -1,
+        -1,  1,
+        -1,  1,
+         1, -1,
+         1,  1
+      ]),
+      gl.STATIC_DRAW
+    );
+
+    gl.enableVertexAttribArray(positionLocation);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+    function render(time) {
+      gl.uniform1f(timeLocation, time * 0.001);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      requestAnimationFrame(render);
+    }
+
+    requestAnimationFrame(render);
+
+    // === Fake Terminal + Flashing Text ===
+
+    const overlay = document.getElementById("overlay");
+    const consoleDiv = document.getElementById("console");
+
+    let t = 0;
+
+    const codeLines = [
+      "Compiling drain_core...",
+      "Injecting battery loop handler...",
+      "Spawning threads...",
+      "Overloading GPU canvas...",
+      "Activating silent audio loop...",
+      "Crunching primes...",
+      "Simulating load @ 99% CPU...",
+      "Allocating VRAM cache...",
+      "Executing drain_protocol v3...",
+      "Thermal throttling bypassed...",
+      "Running background loops...",
+      "Keeping CPU hot...",
+      "Rendering RGB noise...",
+      "Downloading null packets...",
+      "Reallocating memory...",
+      "Overheating? Yes [OK]",
+      "Looping canvas renderer...",
+      "Boosting frame generator...",
+      "Logging performance drop..."
+    ];
+
+    let log = "";
+    setInterval(() => {
+      const line = codeLines[Math.floor(Math.random() * codeLines.length)];
+      log += `[${new Date().toLocaleTimeString()}] ${line}\n`;
+      const lines = log.split("\n");
+      if (lines.length > 40) log = lines.slice(-40).join("\n");
+      consoleDiv.textContent = log;
+    }, 100);
+
+    setInterval(() => {
+      const hue = t % 360;
+      const invHue = (hue + 180) % 360;
+      const color = `hsl(${invHue}, 100%, 50%)`;
+      const glow = `hsl(${invHue}, 100%, 70%)`;
+      overlay.style.color = color;
+      overlay.style.textShadow = `0 0 20px ${glow}`;
+      consoleDiv.style.color = color;
+      consoleDiv.style.textShadow = `0 0 10px ${glow}`;
+      t += 2;
+    }, 100);
+
+    // === Audio Loop to Keep Media Active ===
+    const audio = document.getElementById("audio");
+    audio.volume = 0.01;
+    audio.play().catch(e => console.warn("Autoplay blocked", e));
+  </script>
+</body>
+</html>
